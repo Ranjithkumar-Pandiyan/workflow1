@@ -1,3 +1,23 @@
+/*
+Use a data lookup for the latest Ubuntu 22.04 AMI (canonical) so AMI is correct per-region.
+Make SSH CIDR configurable and use security_group_ids (recommended for VPC).
+*/
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
@@ -17,7 +37,7 @@ resource "aws_security_group" "ec2_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = [var.ssh_allowed_cidr]
   }
 
   egress {
@@ -29,12 +49,12 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "server" {
-  ami           = "ami-0c02fb55956c7d316" # Ubuntu 22.04 for us-east-1
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.public.id
-  key_name      = var.key_name
+  ami               = data.aws_ami.ubuntu.id
+  instance_type     = var.instance_type
+  subnet_id         = aws_subnet.public.id
+  key_name          = var.key_name
 
-  security_groups = [aws_security_group.ec2_sg.id]
+  security_group_ids = [aws_security_group.ec2_sg.id]
 
   tags = {
     Name = "Automated-EC2"
