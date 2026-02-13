@@ -4,6 +4,18 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      key_name:
+        description: 'EC2 key pair name to use'
+        required: false
+      ssh_allowed_cidr:
+        description: 'CIDR to allow SSH from'
+        required: false
+        default: '0.0.0.0/0'
+      apply:
+        description: 'Set to true to run terraform apply (manual dispatch only)'
+        required: false
+        default: 'false'
 
 jobs:
   terraform:
@@ -12,6 +24,8 @@ jobs:
     env:
       TF_ROOT: .
       AWS_REGION: us-east-1
+      KEY_NAME: my-key-actions
+      SSH_ALLOWED_CIDR: 0.0.0.0/0
     permissions:
       contents: read
     steps:
@@ -26,18 +40,22 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.AKIA6OORWPDS2PFHWWFH }}
-          aws-secret-access-key: ${{ secrets.2kWt3JZsrrYCkbJM3KZZHXARm9IkG+9tHZkvtmqn }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
         run: terraform -chdir=${{ env.TF_ROOT }} init -input=false
 
       - name: Terraform Plan
-        run: terraform -chdir=${{ env.TF_ROOT }} plan -out=tfplan -input=false
+        run: |
+          terraform -chdir=${{ env.TF_ROOT }} plan -out=tfplan -input=false \
+            -var="key_name=${{ github.event.inputs.key_name || env.KEY_NAME }}" \
+            -var="ssh_allowed_cidr=${{ github.event.inputs.ssh_allowed_cidr || env.SSH_ALLOWED_CIDR }}"
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
+      - name: Terraform Apply (manual dispatch only)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'true' }}
         run: terraform -chdir=${{ env.TF_ROOT }} apply -input=false -auto-approve tfplan
+
 
  
